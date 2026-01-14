@@ -1,0 +1,26 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: core-service
+  namespace: default
+spec:
+  hosts:
+  - core-service
+  - "*.example.com"
+  gateways:
+  - mesh
+  - istio-system/ingressgateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: core-service
+        port:
+          number: 80
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+    timeout: 10s

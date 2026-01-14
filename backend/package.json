@@ -1,0 +1,26 @@
+{
+  "name": "vatic-prop-backend",
+  "version": "1.0.0",
+  "description": "Vatic Prop backend microservices monorepo",
+  "type": "module",
+  "workspaces": [
+    "core-service",
+    "market-data-service",
+    "monte-carlo-service",
+    "websocket-service",
+    "report-service"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd core-service src/index.ts",
+    "build": "bun run build --cwd core-service && bun run build --cwd market-data-service && bun run build --cwd monte-carlo-service && bun run build --cwd websocket-service && bun run build --cwd report-service",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "prettier": "^3.1.0",
+    "eslint": "^8.54.0"
+  }
+}

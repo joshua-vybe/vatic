@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "cockroachdb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sessions     Session[]
+  purchases    Purchase[]
+  assessments  Assessment[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Tier {
+  id              String @id @default(uuid())
+  name            String
+  price           Int
+  startingBalance Int    @map("starting_balance")
+  maxDrawdown     Float  @map("max_drawdown")
+  minTrades       Int    @map("min_trades")
+  maxRiskPerTrade Float  @map("max_risk_per_trade")
+  profitSplit     Float  @map("profit_split")
+
+  purchases   Purchase[]
+  assessments Assessment[]
+
+  @@map("tiers")
+}
+
+model Purchase {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  tierId          String    @map("tier_id")
+  stripePaymentId String    @map("stripe_payment_id")
+  status          String
+  createdAt       DateTime  @default(now()) @map("created_at")
+  completedAt     DateTime? @map("completed_at")
+
+  user        User         @relation(fields: [userId], references: [id])
+  tier        Tier         @relation(fields: [tierId], references: [id])
+  assessments Assessment[]
+
+  @@index([userId])
+  @@index([stripePaymentId])
+  @@map("purchases")
+}
+
+model Assessment {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  tierId      String    @map("tier_id")
+  purchaseId  String    @unique @map("purchase_id")
+  status      String
+  createdAt   DateTime  @default(now()) @map("created_at")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  user           User            @relation(fields: [userId], references: [id])
+  tier           Tier            @relation(fields: [tierId], references: [id])
+  purchase       Purchase        @relation(fields: [purchaseId], references: [id])
+  virtualAccount VirtualAccount?
+  positions      Position[]
+  trades         Trade[]
+  ruleChecks     RuleCheck[]
+  violations     Violation[]
+
+  @@index([userId, status])
+  @@map("assessments")
+}
+
+model VirtualAccount {
+  id              String   @id @default(uuid())
+  assessmentId    String   @unique @map("assessment_id")
+  startingBalance Int      @map("starting_balance")
+  currentBalance  Float    @map("current_balance")
+  peakBalance     Float    @map("peak_balance")
+  realizedPnl     Float    @map("realized_pnl")
+  unrealizedPnl   Float    @map("unrealized_pnl")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@map("virtual_accounts")
+}
+
+model Position {
+  id            String    @id @default(uuid())
+  assessmentId  String    @map("assessment_id")
+  market        String
+  side          String
+  quantity      Float
+  entryPrice    Float     @map("entry_price")
+  currentPrice  Float     @map("current_price")
+  unrealizedPnl Float     @map("unrealized_pnl")
+  openedAt      DateTime  @default(now()) @map("opened_at")
+  closedAt      DateTime? @map("closed_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  trades     Trade[]
+
+  @@index([assessmentId, closedAt])
+  @@map("positions")
+}
+
+model Trade {
+  id           String   @id @default(uuid())
+  assessmentId String   @map("assessment_id")
+  positionId   String   @map("position_id")
+  type         String
+  market       String
+  side         String
+  quantity     Float
+  price        Float
+  slippage     Float
+  fee          Float
+  pnl          Float
+  timestamp    DateTime @default(now())
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  position   Position   @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId, timestamp])
+  @@map("trades")
+}
+
+model RuleCheck {
+  id           String   @id @default(uuid())
+  assessmentId String   @map("assessment_id")
+  ruleType     String   @map("rule_type")
+  value        Float
+  threshold    Float
+  status       String
+  timestamp    DateTime @default(now())
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId, timestamp])
+  @@map("rule_checks")
+}
+
+model Violation {
+  id           String   @id @default(uuid())
+  assessmentId String   @map("assessment_id")
+  ruleType     String   @map("rule_type")
+  value        Float
+  threshold    Float
+  timestamp    DateTime @default(now())
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@map("violations")
+}

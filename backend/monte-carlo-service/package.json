@@ -1,0 +1,25 @@
+{
+  "name": "monte-carlo-service",
+  "version": "1.0.0",
+  "description": "Monte Carlo simulation service for Vatic Prop",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun run dist/index.js"
+  },
+  "dependencies": {
+    "elysia": "latest",
+    "@elysiajs/cors": "latest",
+    "axios": "^1.6.2",
+    "kafkajs": "^2.2.4",
+    "@prisma/client": "^5.7.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "prisma": "^5.7.0"
+  }
+}
