@@ -8,9 +8,19 @@ The backend consists of 5 microservices deployed on AWS EKS with Istio service m
 
 - **Core Service** (Port 3000): User management, authentication, tier management, purchases, and assessment orchestration
 - **Market Data Service** (Port 3001): Real-time market data ingestion from multiple sources (crypto, prediction markets)
-- **Monte Carlo Service** (Port 3002): Simulation engine for risk analysis and strategy validation
-- **WebSocket Service** (Port 3003): Real-time bidirectional communication for live updates
+- **Monte Carlo Service** (Port 3002): Distributed risk simulations via Ray Serve cluster
+- **WebSocket Service** (Port 3003): Real-time bidirectional communication for live updates to connected clients
 - **Report Service** (Port 3004): Assessment report generation and analytics
+
+### Service Responsibilities
+
+**WebSocket Service** handles:
+- JWT-based WebSocket authentication
+- Real-time event streaming from Kafka to connected clients
+- Client connection state management with assessment_id routing
+- Heartbeat mechanism for connection health monitoring
+- Horizontal scaling through consistent hashing on assessment_id
+- Prometheus metrics for monitoring and observability
 
 ### Infrastructure Components
 
@@ -20,6 +30,7 @@ The backend consists of 5 microservices deployed on AWS EKS with Istio service m
 - **Redis Enterprise Cloud**: In-memory data store for caching and real-time data
 - **Istio**: Service mesh for traffic management and security
 - **AWS Secrets Manager**: Centralized secrets management
+- **KubeRay Operator**: Ray Serve cluster management on EKS
 
 ## Local Development Setup
 
@@ -71,16 +82,16 @@ bun run src/index.ts
 cd backend/market-data-service
 bun run src/index.ts
 
+# Monte Carlo Service (in another terminal)
+cd backend/monte-carlo-service
+bun run src/index.ts
+
 # WebSocket Service (in another terminal)
 cd backend/websocket-service
 bun run src/index.ts
 
 # Report Service (in another terminal)
 cd backend/report-service
-bun run src/index.ts
-
-# Monte Carlo Service (in another terminal)
-cd backend/monte-carlo-service
 bun run src/index.ts
 ```
 
@@ -245,12 +256,13 @@ Market data and event topics are created on AWS MSK:
 - `assessment.abandoned`
 - `assessment.completed`
 
+**Monte Carlo Topics** (30-day retention):
+- `montecarlo.simulation-completed`
+
 **Other Topics**:
 - `rules.violation-detected`
 - `payment.purchase-completed`
 - `payment.purchase-failed`
-- `montecarlo.simulation-started`
-- `montecarlo.simulation-completed`
 
 ## Troubleshooting
 
@@ -295,8 +307,12 @@ Market data and event topics are created on AWS MSK:
 
 ### WebSocket Service
 
+- `WS /ws` - WebSocket endpoint for real-time updates
 - `GET /health` - Health check
 - `GET /ready` - Readiness check
+- `GET /metrics` - Prometheus metrics
+
+See `backend/websocket-service/README.md` for WebSocket protocol details.
 
 ### Report Service
 
@@ -307,6 +323,11 @@ Market data and event topics are created on AWS MSK:
 
 - `GET /health` - Health check
 - `GET /ready` - Readiness check
+- `POST /simulations` - Trigger simulation
+- `GET /simulations/:id` - Get simulation result
+- `GET /simulations` - List simulations
+
+See `backend/monte-carlo-service/README.md` for detailed API documentation.
 
 ## Development Workflow
 

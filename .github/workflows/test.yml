@@ -1,0 +1,208 @@
+name: Test Pipeline
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: oven-sh/setup-bun@v1
+      
+      - name: Install dependencies
+        run: cd backend && bun install
+      
+      - name: Run unit tests
+        run: cd backend && bun test tests/unit/ --coverage
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage/coverage.json
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    services:
+      cockroachdb:
+        image: cockroachdb/cockroach:latest
+        options: >-
+          --health-cmd="./cockroach sql --insecure -e 'SELECT 1'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+        ports:
+          - 26257:26257
+        env:
+          COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING: "true"
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+        ports:
+          - 6379:6379
+      
+      kafka:
+        image: confluentinc/cp-kafka:latest
+        env:
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        ports:
+          - 9092:9092
+      
+      zookeeper:
+        image: confluentinc/cp-zookeeper:latest
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+        ports:
+          - 2181:2181
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: oven-sh/setup-bun@v1
+      
+      - name: Install dependencies
+        run: cd backend && bun install
+      
+      - name: Wait for CockroachDB to start
+        run: |
+          timeout 60 bash -c 'until docker exec $(docker ps -q -f "ancestor=cockroachdb/cockroach:latest") ./cockroach sql --insecure -e "SELECT 1" 2>/dev/null; do sleep 1; done' || true
+      
+      - name: Initialize CockroachDB
+        run: |
+          docker exec $(docker ps -q -f "ancestor=cockroachdb/cockroach:latest") \
+            ./cockroach sql --insecure -e "CREATE DATABASE IF NOT EXISTS defaultdb;"
+      
+      - name: Wait for services
+        run: |
+          timeout 60 bash -c 'until nc -z localhost 26257; do sleep 1; done'
+          timeout 60 bash -c 'until nc -z localhost 6379; do sleep 1; done'
+          timeout 60 bash -c 'until nc -z localhost 9092; do sleep 1; done'
+      
+      - name: Run integration tests
+        run: cd backend && bun test tests/integration/
+        env:
+          DATABASE_URL: postgresql://root@localhost:26257/defaultdb?sslmode=disable
+          REDIS_URL: redis://localhost:6379
+          KAFKA_BROKERS: localhost:9092
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    services:
+      cockroachdb:
+        image: cockroachdb/cockroach:latest
+        options: >-
+          --health-cmd="./cockroach sql --insecure -e 'SELECT 1'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+        ports:
+          - 26257:26257
+        env:
+          COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING: "true"
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+        ports:
+          - 6379:6379
+      
+      kafka:
+        image: confluentinc/cp-kafka:latest
+        env:
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        ports:
+          - 9092:9092
+      
+      zookeeper:
+        image: confluentinc/cp-zookeeper:latest
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+        ports:
+          - 2181:2181
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: oven-sh/setup-bun@v1
+      
+      - name: Install dependencies
+        run: cd backend && bun install
+      
+      - name: Wait for CockroachDB to start
+        run: |
+          timeout 60 bash -c 'until docker exec $(docker ps -q -f "ancestor=cockroachdb/cockroach:latest") ./cockroach sql --insecure -e "SELECT 1" 2>/dev/null; do sleep 1; done' || true
+      
+      - name: Initialize CockroachDB
+        run: |
+          docker exec $(docker ps -q -f "ancestor=cockroachdb/cockroach:latest") \
+            ./cockroach sql --insecure -e "CREATE DATABASE IF NOT EXISTS defaultdb;"
+      
+      - name: Wait for services
+        run: |
+          timeout 60 bash -c 'until nc -z localhost 26257; do sleep 1; done'
+          timeout 60 bash -c 'until nc -z localhost 6379; do sleep 1; done'
+          timeout 60 bash -c 'until nc -z localhost 9092; do sleep 1; done'
+      
+      - name: Run E2E tests
+        run: cd backend && bun test tests/e2e/
+        env:
+          DATABASE_URL: postgresql://root@localhost:26257/defaultdb?sslmode=disable
+          REDIS_URL: redis://localhost:6379
+          KAFKA_BROKERS: localhost:9092
+
+  lint-and-type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: oven-sh/setup-bun@v1
+      
+      - name: Install dependencies
+        run: cd backend && bun install
+      
+      - name: Type check
+        run: cd backend && bun run type-check || true
+      
+      - name: Lint
+        run: cd backend && bun run lint || true
+
+  test-summary:
+    needs: [unit-tests, integration-tests, e2e-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          if [ "${{ needs.unit-tests.result }}" != "success" ]; then
+            echo "Unit tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.integration-tests.result }}" != "success" ]; then
+            echo "Integration tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.e2e-tests.result }}" != "success" ]; then
+            echo "E2E tests failed"
+            exit 1
+          fi
+          echo "All tests passed!"

@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monte-carlo-service
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: monte-carlo-service
+  template:
+    metadata:
+      labels:
+        app: monte-carlo-service
+      annotations:
+        sidecar.istio.io/inject: "true"
+    spec:
+      containers:
+        - name: monte-carlo-service
+          image: <ECR_REGISTRY>/monte-carlo-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3002
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3002"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: monte-carlo-service-secrets
+                  key: database-url
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: monte-carlo-service-config
+                  key: redis-host
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: monte-carlo-service-config
+                  key: redis-port
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: monte-carlo-service-secrets
+                  key: redis-password
+            - name: KAFKA_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: monte-carlo-service-config
+                  key: kafka-brokers
+            - name: KAFKA_CLIENT_ID
+              value: "monte-carlo-service"
+            - name: KAFKA_GROUP_ID
+              value: "monte-carlo-service-group"
+            - name: RAY_SERVE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: monte-carlo-service-config
+                  key: ray-serve-url
+            - name: CORE_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: monte-carlo-service-config
+                  key: core-service-url
+            - name: AWS_REGION
+              value: "us-east-1"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3002
+            initialDelaySeconds: 10
+            periodSeconds: 10

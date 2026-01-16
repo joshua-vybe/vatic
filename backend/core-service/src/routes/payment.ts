@@ -325,6 +325,171 @@ export function createPaymentRoutes(stripeSecretKey: string, stripeWebhookSecret
           }
         }
 
+        // Handle payout.paid event
+        if (event.type === 'payout.paid') {
+          const payout = event.data.object as Stripe.Payout;
+
+          logger.info('Processing payout.paid', {
+            payoutId: payout.id,
+            amount: payout.amount,
+            correlationId,
+          });
+
+          try {
+            // Find withdrawal by stripePayoutId
+            const withdrawal = await prisma.withdrawal.findFirst({
+              where: { stripePayoutId: payout.id },
+              include: { fundedAccount: true },
+            });
+
+            if (!withdrawal) {
+              logger.warn('Withdrawal not found for payout', {
+                payoutId: payout.id,
+                correlationId,
+              });
+              return new Response(
+                JSON.stringify({ received: true }),
+                { status: 200, headers: { 'Content-Type': 'application/json' } }
+              );
+            }
+
+            // Update withdrawal status to completed
+            const completedAt = new Date();
+            await prisma.withdrawal.update({
+              where: { id: withdrawal.id },
+              data: {
+                status: 'completed',
+                completedAt,
+              },
+            });
+
+            logger.info('Withdrawal marked as completed', {
+              withdrawalId: withdrawal.id,
+              payoutId: payout.id,
+              correlationId,
+            });
+
+            // Publish Kafka event (non-blocking)
+            publishEvent('withdrawal.completed', {
+              withdrawalId: withdrawal.id,
+              fundedAccountId: withdrawal.fundedAccountId,
+              userId: withdrawal.userId,
+              amount: withdrawal.amount,
+              stripePayoutId: payout.id,
+              correlationId,
+              timestamp: Date.now(),
+            }).catch((error) => {
+              logger.error('Failed to publish withdrawal.completed event', {
+                error: String(error),
+                correlationId,
+              });
+            });
+          } catch (error) {
+            logger.error('Failed to process payout.paid', {
+              error: String(error),
+              payoutId: payout.id,
+              correlationId,
+            });
+            return new Response(
+              JSON.stringify({ error: 'Failed to process payout' }),
+              { status: 500, headers: { 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+
+        // Handle payout.failed event
+        if (event.type === 'payout.failed') {
+          const payout = event.data.object as Stripe.Payout;
+
+          logger.info('Processing payout.failed', {
+            payoutId: payout.id,
+            failureCode: payout.failure_code,
+            failureMessage: payout.failure_message,
+            correlationId,
+          });
+
+          try {
+            // Find withdrawal by stripePayoutId
+            const withdrawal = await prisma.withdrawal.findFirst({
+              where: { stripePayoutId: payout.id },
+              include: { fundedAccount: { include: { fundedVirtualAccount: true } } },
+            });
+
+            if (!withdrawal) {
+              logger.warn('Withdrawal not found for failed payout', {
+                payoutId: payout.id,
+                correlationId,
+              });
+              return new Response(
+                JSON.stringify({ received: true }),
+                { status: 200, headers: { 'Content-Type': 'application/json' } }
+              );
+            }
+
+            // Update withdrawal status to rejected
+            const rejectedAt = new Date();
+            await prisma.withdrawal.update({
+              where: { id: withdrawal.id },
+              data: {
+                status: 'rejected',
+                rejectedAt,
+                rejectionReason: payout.failure_message || 'Payout failed',
+              },
+            });
+
+            logger.info('Withdrawal marked as rejected due to payout failure', {
+              withdrawalId: withdrawal.id,
+              payoutId: payout.id,
+              failureMessage: payout.failure_message,
+              correlationId,
+            });
+
+            // Revert totalWithdrawals in FundedVirtualAccount
+            if (withdrawal.fundedAccount.fundedVirtualAccount) {
+              const virtualAccount = withdrawal.fundedAccount.fundedVirtualAccount;
+              await prisma.fundedVirtualAccount.update({
+                where: { id: virtualAccount.id },
+                data: {
+                  totalWithdrawals: Math.max(0, virtualAccount.totalWithdrawals - withdrawal.amount),
+                },
+              });
+
+              logger.debug('Reverted totalWithdrawals', {
+                fundedAccountId: withdrawal.fundedAccountId,
+                amount: withdrawal.amount,
+                correlationId,
+              });
+            }
+
+            // Publish Kafka event (non-blocking)
+            publishEvent('withdrawal.failed', {
+              withdrawalId: withdrawal.id,
+              fundedAccountId: withdrawal.fundedAccountId,
+              userId: withdrawal.userId,
+              amount: withdrawal.amount,
+              stripePayoutId: payout.id,
+              failureReason: payout.failure_message || 'Payout failed',
+              correlationId,
+              timestamp: Date.now(),
+            }).catch((error) => {
+              logger.error('Failed to publish withdrawal.failed event', {
+                error: String(error),
+                correlationId,
+              });
+            });
+          } catch (error) {
+            logger.error('Failed to process payout.failed', {
+              error: String(error),
+              payoutId: payout.id,
+              correlationId,
+            });
+            return new Response(
+              JSON.stringify({ error: 'Failed to process payout failure' }),
+              { status: 500, headers: { 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+
         // Return 200 to acknowledge webhook receipt
         return new Response(
           JSON.stringify({ received: true }),

@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: market-data-service
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: market-data-service
+  template:
+    metadata:
+      labels:
+        app: market-data-service
+      annotations:
+        sidecar.istio.io/inject: "true"
+    spec:
+      containers:
+      - name: market-data-service
+        image: market-data-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3001
+          name: http
+        env:
+        - name: PORT
+          value: "3001"
+        - name: NODE_ENV
+          value: "production"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: market-data-secrets
+              key: database-url
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: market-data-config
+              key: redis-host
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: market-data-config
+              key: redis-port
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: market-data-secrets
+              key: redis-password
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: market-data-config
+              key: kafka-brokers
+        - name: KAFKA_CLIENT_ID
+          value: "market-data-service"
+        - name: COINGECKO_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: market-data-secrets
+              key: coingecko-api-key
+        - name: POLYMARKET_WS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: market-data-config
+              key: polymarket-ws-url
+        - name: KALSHI_WS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: market-data-config
+              key: kalshi-ws-url
+        - name: KALSHI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: market-data-secrets
+              key: kalshi-api-key
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3001
+          initialDelaySeconds: 10
+          periodSeconds: 10

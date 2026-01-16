@@ -1,253 +1,226 @@
 "use client"
 
-import { type Component, createSignal } from "solid-js"
+import { type Component, createSignal, onMount, For, Show } from "solid-js"
+import { useNavigate } from "@solidjs/router"
 import { animate, spring } from "motion"
+import { toast } from "sonner"
+import { authStore } from "../stores/authStore"
+import { getTiers, createPurchase } from "../lib/api/payment"
+import { LoadingSpinner } from "../components/LoadingSpinner"
+import type { Tier } from "../types"
 
-interface LoginProps {
-  onLogin: () => void
-}
-
-const tiers = [
-  { name: "Starter", price: 99, target: "5%", capital: "$10,000" },
-  { name: "Standard", price: 199, target: "8%", capital: "$25,000" },
-  { name: "Advanced", price: 349, target: "8%", capital: "$50,000" },
-  { name: "Professional", price: 499, target: "10%", capital: "$100,000" },
-]
-
-const Login: Component<LoginProps> = (props) => {
+const Login: Component = () => {
+  const navigate = useNavigate()
   const [email, setEmail] = createSignal("")
   const [password, setPassword] = createSignal("")
-  const [selectedTier, setSelectedTier] = createSignal(1)
-  const [focusedField, setFocusedField] = createSignal<string | null>(null)
+  const [selectedTier, setSelectedTier] = createSignal<string | null>(null)
+  const [emailFocused, setEmailFocused] = createSignal(false)
+  const [passwordFocused, setPasswordFocused] = createSignal(false)
+  const [tiers, setTiers] = createSignal<Tier[]>([])
+  const [loading, setLoading] = createSignal(false)
+  const [tiersLoading, setTiersLoading] = createSignal(true)
 
-  const handleSubmit = (e: Event) => {
+  let formRef: HTMLDivElement | undefined
+  let tiersRef: HTMLDivElement | undefined
+
+  onMount(async () => {
+    // Fetch tiers on mount
+    try {
+      const fetchedTiers = await getTiers()
+      setTiers(fetchedTiers)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load tiers'
+      toast.error(message)
+    } finally {
+      setTiersLoading(false)
+    }
+
+    if (formRef) {
+      animate(
+        formRef,
+        { opacity: [0, 1], y: [20, 0] },
+        { duration: 0.6, easing: spring({ stiffness: 250, damping: 30 }) },
+      )
+    }
+    if (tiersRef) {
+      animate(
+        tiersRef,
+        { opacity: [0, 1], y: [20, 0] },
+        { duration: 0.6, delay: 0.2, easing: spring({ stiffness: 250, damping: 30 }) },
+      )
+    }
+  })
+
+  const handleSubmit = async (e: Event) => {
     e.preventDefault()
-    props.onLogin()
+    if (!email() || !password() || !selectedTier()) {
+      toast.error("Please fill in all fields")
+      return
+    }
+
+    setLoading(true)
+    try {
+      // Login
+      await authStore.login(email(), password())
+      
+      // Create purchase
+      const purchase = await createPurchase(selectedTier()!)
+      
+      // Handle checkout if URL is provided
+      if (purchase.stripe_session_id) {
+        // Redirect to Stripe checkout
+        window.location.href = `https://checkout.stripe.com/pay/${purchase.stripe_session_id}`
+        return
+      }
+      
+      // If no checkout needed, navigate to dashboard
+      navigate("/dashboard")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Login failed'
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleTierHover = (index: number, el: HTMLElement) => {
-    animate(el, { scale: 1.05, y: -8 }, { duration: 0.3, easing: spring({ stiffness: 250, damping: 30 }) })
-  }
-
-  const handleTierLeave = (el: HTMLElement) => {
-    animate(el, { scale: 1, y: 0 }, { duration: 0.3, easing: spring({ stiffness: 250, damping: 30 }) })
+  const handleTierSelect = (tierId: string) => {
+    setSelectedTier(tierId)
   }
 
   return (
-    <div
-      style={{
-        "min-height": "100vh",
-        background: "#000000",
-        display: "flex",
-        "align-items": "center",
-        "justify-content": "center",
-        padding: "40px 20px",
-      }}
-    >
-      <div style={{ "max-width": "1200px", width: "100%", display: "flex", "flex-direction": "column", gap: "80px" }}>
+    <div class="min-h-screen bg-[#000000] flex items-center justify-center p-8">
+      <div class="w-full max-w-6xl">
         {/* Header */}
-        <div style={{ "text-align": "center" }}>
-          <h1
-            style={{
-              "font-size": "48px",
-              "font-weight": "600",
-              color: "#ffffff",
-              "margin-bottom": "16px",
-              "letter-spacing": "-0.02em",
-            }}
-          >
-            VATIC PROP
-          </h1>
-          <p style={{ "font-size": "16px", color: "#888888", "letter-spacing": "0.05em" }}>
-            PROFESSIONAL TRADING ASSESSMENT
-          </p>
+        <div ref={formRef} class="text-center mb-16">
+          <h1 class="text-5xl font-bold mb-4 tracking-tight">VATIC PROP</h1>
+          <p class="text-[#aaaaaa] text-sm">Elite Prop Trading Assessment Platform</p>
         </div>
 
         {/* Login Form */}
-        <div
-          style={{
-            background: "#111111",
-            padding: "60px",
-            "border-radius": "0px",
-            "max-width": "480px",
-            width: "100%",
-            margin: "0 auto",
-          }}
-        >
-          <h2
-            style={{
-              "font-size": "24px",
-              "font-weight": "600",
-              "margin-bottom": "40px",
-              color: "#ffffff",
-              "text-align": "center",
-            }}
-          >
-            Sign In
-          </h2>
-
-          <form onSubmit={handleSubmit} style={{ display: "flex", "flex-direction": "column", gap: "32px" }}>
-            <div style={{ position: "relative" }}>
-              <label
-                style={{
-                  position: "absolute",
-                  left: "0",
-                  top: focusedField() === "email" || email() ? "-20px" : "16px",
-                  "font-size": focusedField() === "email" || email() ? "12px" : "14px",
-                  color: focusedField() === "email" ? "#ffffff" : "#666666",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                  "pointer-events": "none",
-                }}
-              >
-                Email Address
-              </label>
+        <div ref={formRef} class="max-w-md mx-auto mb-20">
+          <form onSubmit={handleSubmit} class="space-y-8">
+            {/* Email Input */}
+            <div class="relative">
               <input
                 type="email"
                 value={email()}
                 onInput={(e) => setEmail(e.currentTarget.value)}
-                onFocus={() => setFocusedField("email")}
-                onBlur={() => setFocusedField(null)}
-                style={{
-                  width: "100%",
-                  padding: "16px 0",
-                  background: "transparent",
-                  border: "none",
-                  "border-bottom": `1px solid ${focusedField() === "email" ? "#ffffff" : "#333333"}`,
-                  color: "#ffffff",
-                  "font-size": "14px",
-                  transition: "border-color 0.3s ease",
-                }}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
+                class="w-full bg-[#111111] border-b border-[#222222] px-0 py-4 text-white outline-none focus:border-white transition-all"
+                required
+                disabled={loading()}
               />
+              <label
+                class={`absolute left-0 transition-all duration-300 pointer-events-none ${
+                  emailFocused() || email() ? "text-xs text-[#aaaaaa] -top-5" : "text-sm text-[#666666] top-4"
+                }`}
+              >
+                Email Address
+              </label>
             </div>
 
-            <div style={{ position: "relative" }}>
-              <label
-                style={{
-                  position: "absolute",
-                  left: "0",
-                  top: focusedField() === "password" || password() ? "-20px" : "16px",
-                  "font-size": focusedField() === "password" || password() ? "12px" : "14px",
-                  color: focusedField() === "password" ? "#ffffff" : "#666666",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                  "pointer-events": "none",
-                }}
-              >
-                Password
-              </label>
+            {/* Password Input */}
+            <div class="relative">
               <input
                 type="password"
                 value={password()}
                 onInput={(e) => setPassword(e.currentTarget.value)}
-                onFocus={() => setFocusedField("password")}
-                onBlur={() => setFocusedField(null)}
-                style={{
-                  width: "100%",
-                  padding: "16px 0",
-                  background: "transparent",
-                  border: "none",
-                  "border-bottom": `1px solid ${focusedField() === "password" ? "#ffffff" : "#333333"}`,
-                  color: "#ffffff",
-                  "font-size": "14px",
-                  transition: "border-color 0.3s ease",
-                }}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
+                class="w-full bg-[#111111] border-b border-[#222222] px-0 py-4 text-white outline-none focus:border-white transition-all"
+                required
+                disabled={loading()}
               />
+              <label
+                class={`absolute left-0 transition-all duration-300 pointer-events-none ${
+                  passwordFocused() || password() ? "text-xs text-[#aaaaaa] -top-5" : "text-sm text-[#666666] top-4"
+                }`}
+              >
+                Password
+              </label>
             </div>
-
-            <button
-              type="submit"
-              style={{
-                width: "100%",
-                padding: "18px",
-                background: "#ffffff",
-                color: "#000000",
-                border: "none",
-                "font-size": "14px",
-                "font-weight": "600",
-                "margin-top": "16px",
-                "letter-spacing": "0.05em",
-                transition: "all 0.3s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#eeeeee"
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#ffffff"
-              }}
-            >
-              CONTINUE
-            </button>
           </form>
         </div>
 
-        {/* Challenge Tiers */}
-        <div>
-          <h3
-            style={{
-              "font-size": "20px",
-              "font-weight": "600",
-              "text-align": "center",
-              "margin-bottom": "40px",
-              color: "#ffffff",
-              "letter-spacing": "0.05em",
-            }}
-          >
-            SELECT YOUR CHALLENGE
-          </h3>
-          <div
-            style={{
-              display: "grid",
-              "grid-template-columns": "repeat(auto-fit, minmax(240px, 1fr))",
-              gap: "24px",
-            }}
-          >
-            {tiers.map((tier, index) => (
-              <div
-                key={tier.name} // Added key property
-                ref={(el) => {
-                  el.addEventListener("mouseenter", () => handleTierHover(index, el))
-                  el.addEventListener("mouseleave", () => handleTierLeave(el))
-                }}
-                onClick={() => setSelectedTier(index)}
-                style={{
-                  background: selectedTier() === index ? "#222222" : "#111111",
-                  padding: "40px 32px",
-                  cursor: "pointer",
-                  border: `1px solid ${selectedTier() === index ? "#444444" : "#222222"}`,
-                  transition: "border-color 0.3s ease",
-                }}
-              >
-                <div style={{ "margin-bottom": "24px" }}>
+        {/* Tier Selection */}
+        <div ref={tiersRef}>
+          <h2 class="text-2xl font-semibold text-center mb-12 tracking-tight">Select Your Challenge</h2>
+          <Show when={!tiersLoading()} fallback={<LoadingSpinner />}>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <For each={tiers()}>
+                {(tier) => (
                   <div
-                    style={{
-                      "font-size": "14px",
-                      color: "#888888",
-                      "margin-bottom": "8px",
-                      "letter-spacing": "0.05em",
+                    onClick={() => handleTierSelect(tier.id)}
+                    onMouseEnter={(e) => {
+                      animate(
+                        e.currentTarget,
+                        { scale: 1.02, y: -4 },
+                        { duration: 0.3, easing: spring({ stiffness: 250, damping: 30 }) },
+                      )
                     }}
+                    onMouseLeave={(e) => {
+                      animate(
+                        e.currentTarget,
+                        { scale: 1, y: 0 },
+                        { duration: 0.3, easing: spring({ stiffness: 250, damping: 30 }) },
+                      )
+                    }}
+                    class={`bg-[#111111] p-8 cursor-pointer transition-all ${
+                      selectedTier() === tier.id ? "border-2 border-white" : "border border-[#222222]"
+                    }`}
                   >
-                    {tier.name.toUpperCase()}
+                    <div class="mb-6">
+                      <h3 class="text-xs font-semibold text-[#aaaaaa] mb-2 tracking-widest">{tier.name}</h3>
+                      <div class="flex items-baseline gap-1">
+                        <span class="text-4xl font-bold">${tier.price}</span>
+                        <span class="text-[#666666] text-sm">USD</span>
+                      </div>
+                    </div>
+                    <ul class="space-y-3">
+                      <li class="text-sm text-[#aaaaaa] flex items-start gap-2">
+                        <span class="text-white mt-1">—</span>
+                        <span>${tier.account_size.toLocaleString()} Account</span>
+                      </li>
+                      <li class="text-sm text-[#aaaaaa] flex items-start gap-2">
+                        <span class="text-white mt-1">—</span>
+                        <span>{tier.profit_split}% Profit Split</span>
+                      </li>
+                      <li class="text-sm text-[#aaaaaa] flex items-start gap-2">
+                        <span class="text-white mt-1">—</span>
+                        <span>8% Phase 1 Target</span>
+                      </li>
+                      <li class="text-sm text-[#aaaaaa] flex items-start gap-2">
+                        <span class="text-white mt-1">—</span>
+                        <span>5% Phase 2 Target</span>
+                      </li>
+                    </ul>
                   </div>
-                  <div style={{ "font-size": "36px", "font-weight": "600", color: "#ffffff", "margin-bottom": "4px" }}>
-                    ${tier.price}
-                  </div>
-                  <div style={{ "font-size": "12px", color: "#666666" }}>ONE-TIME FEE</div>
-                </div>
-                <div style={{ display: "flex", "flex-direction": "column", gap: "12px" }}>
-                  <div style={{ display: "flex", "justify-content": "space-between", "font-size": "13px" }}>
-                    <span style={{ color: "#888888" }}>Starting Capital</span>
-                    <span style={{ color: "#ffffff" }}>{tier.capital}</span>
-                  </div>
-                  <div style={{ display: "flex", "justify-content": "space-between", "font-size": "13px" }}>
-                    <span style={{ color: "#888888" }}>Profit Target</span>
-                    <span style={{ color: "#ffffff" }}>{tier.target}</span>
-                  </div>
-                  <div style={{ display: "flex", "justify-content": "space-between", "font-size": "13px" }}>
-                    <span style={{ color: "#888888" }}>Max Drawdown</span>
-                    <span style={{ color: "#ffffff" }}>10%</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+                )}
+              </For>
+            </div>
+          </Show>
+
+          {/* Submit Button */}
+          <div class="mt-12 text-center">
+            <button
+              onClick={handleSubmit}
+              disabled={!email() || !password() || !selectedTier() || loading()}
+              onMouseEnter={(e) => {
+                if (!e.currentTarget.disabled) {
+                  animate(e.currentTarget, { scale: 1.02 }, { duration: 0.2 })
+                }
+              }}
+              onMouseLeave={(e) => {
+                animate(e.currentTarget, { scale: 1 }, { duration: 0.2 })
+              }}
+              class="px-16 py-4 bg-white text-black font-semibold text-sm tracking-wide hover:bg-[#aaaaaa] disabled:bg-[#222222] disabled:text-[#666666] disabled:cursor-not-allowed transition-colors"
+            >
+              {loading() ? "PROCESSING..." : "START ASSESSMENT"}
+            </button>
+            <p class="text-xs text-[#666666] mt-6">
+              By continuing, you agree to our Terms of Service and Privacy Policy
+            </p>
           </div>
         </div>
       </div>

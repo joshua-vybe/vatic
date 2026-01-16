@@ -1,128 +1,167 @@
 "use client"
 
-import { type Component, createSignal } from "solid-js"
+import { type Component, onMount, onCleanup, createSignal } from "solid-js"
 
 interface ChartProps {
   symbol: string
-  currentPrice: number
+  type: "crypto" | "polymarket" | "kalshi"
 }
 
 const Chart: Component<ChartProps> = (props) => {
-  const [timeframe, setTimeframe] = createSignal("1H")
+  let canvasRef: HTMLCanvasElement | undefined
+  const [indicators, setIndicators] = createSignal({
+    sma: false,
+    rsi: false,
+    macd: false,
+  })
+
+  onMount(() => {
+    if (!canvasRef) return
+
+    const canvas = canvasRef
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    // Set canvas size
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
+
+    // Generate mock data
+    const dataPoints = 100
+    const data: number[] = []
+    let basePrice = props.type === "crypto" ? 42000 : 0.5
+
+    for (let i = 0; i < dataPoints; i++) {
+      basePrice += (Math.random() - 0.48) * (props.type === "crypto" ? 200 : 0.05)
+      data.push(basePrice)
+    }
+
+    // Draw chart
+    const drawChart = () => {
+      if (!ctx || !canvas) return
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      const width = canvas.offsetWidth
+      const height = canvas.offsetHeight
+      const padding = 40
+
+      const minPrice = Math.min(...data)
+      const maxPrice = Math.max(...data)
+      const priceRange = maxPrice - minPrice
+
+      // Draw grid
+      ctx.strokeStyle = "#222222"
+      ctx.lineWidth = 1
+      for (let i = 0; i <= 5; i++) {
+        const y = padding + (i * (height - padding * 2)) / 5
+        ctx.beginPath()
+        ctx.moveTo(padding, y)
+        ctx.lineTo(width - padding, y)
+        ctx.stroke()
+      }
+
+      // Draw area fill
+      ctx.fillStyle = props.type === "crypto" ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.08)"
+      ctx.beginPath()
+      ctx.moveTo(padding, height - padding)
+
+      data.forEach((price, index) => {
+        const x = padding + (index * (width - padding * 2)) / (dataPoints - 1)
+        const y = height - padding - ((price - minPrice) / priceRange) * (height - padding * 2)
+        if (index === 0) {
+          ctx.lineTo(x, y)
+        } else {
+          ctx.lineTo(x, y)
+        }
+      })
+
+      ctx.lineTo(width - padding, height - padding)
+      ctx.closePath()
+      ctx.fill()
+
+      // Draw line
+      ctx.strokeStyle = "#ffffff"
+      ctx.lineWidth = 2
+      ctx.beginPath()
+
+      data.forEach((price, index) => {
+        const x = padding + (index * (width - padding * 2)) / (dataPoints - 1)
+        const y = height - padding - ((price - minPrice) / priceRange) * (height - padding * 2)
+        if (index === 0) {
+          ctx.moveTo(x, y)
+        } else {
+          ctx.lineTo(x, y)
+        }
+      })
+
+      ctx.stroke()
+
+      // Draw price labels
+      ctx.fillStyle = "#666666"
+      ctx.font = "10px IBM Plex Mono"
+      ctx.textAlign = "right"
+
+      for (let i = 0; i <= 5; i++) {
+        const price = maxPrice - (i * priceRange) / 5
+        const y = padding + (i * (height - padding * 2)) / 5
+        const label = props.type === "crypto" ? `$${price.toFixed(0)}` : `${(price * 100).toFixed(1)}%`
+        ctx.fillText(label, padding - 10, y + 4)
+      }
+    }
+
+    drawChart()
+
+    // Handle resize
+    const handleResize = () => {
+      if (!canvas) return
+      canvas.width = canvas.offsetWidth * window.devicePixelRatio
+      canvas.height = canvas.offsetHeight * window.devicePixelRatio
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
+      drawChart()
+    }
+
+    window.addEventListener("resize", handleResize)
+
+    onCleanup(() => {
+      window.removeEventListener("resize", handleResize)
+    })
+  })
 
   return (
-    <div style={{ height: "100%", display: "flex", "flex-direction": "column" }}>
-      {/* Chart Controls */}
-      <div
-        style={{
-          display: "flex",
-          "justify-content": "space-between",
-          "align-items": "center",
-          "margin-bottom": "32px",
-        }}
-      >
-        <div style={{ display: "flex", gap: "8px" }}>
-          {["1M", "5M", "15M", "1H", "4H", "1D"].map((tf) => (
-            <button
-              key={tf} // Added key property
-              onClick={() => setTimeframe(tf)}
-              style={{
-                padding: "8px 16px",
-                background: timeframe() === tf ? "#222222" : "transparent",
-                color: timeframe() === tf ? "#ffffff" : "#666666",
-                border: "1px solid #222222",
-                "font-size": "11px",
-                "font-weight": "600",
-                "letter-spacing": "0.05em",
-                transition: "all 0.3s ease",
-              }}
-            >
-              {tf}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button
-            style={{
-              padding: "8px 16px",
-              background: "transparent",
-              color: "#666666",
-              border: "1px solid #222222",
-              "font-size": "11px",
-              "font-weight": "600",
-              "letter-spacing": "0.05em",
-              transition: "all 0.3s ease",
-            }}
-          >
-            INDICATORS
-          </button>
-        </div>
+    <div class="space-y-4">
+      {/* Indicator Toggles */}
+      <div class="flex gap-2">
+        <button
+          onClick={() => setIndicators({ ...indicators(), sma: !indicators().sma })}
+          class={`px-3 py-1 text-xs transition-colors ${
+            indicators().sma ? "bg-white text-black" : "bg-[#222222] text-[#666666] hover:bg-[#2a2a2a]"
+          }`}
+        >
+          SMA
+        </button>
+        <button
+          onClick={() => setIndicators({ ...indicators(), rsi: !indicators().rsi })}
+          class={`px-3 py-1 text-xs transition-colors ${
+            indicators().rsi ? "bg-white text-black" : "bg-[#222222] text-[#666666] hover:bg-[#2a2a2a]"
+          }`}
+        >
+          RSI
+        </button>
+        <button
+          onClick={() => setIndicators({ ...indicators(), macd: !indicators().macd })}
+          class={`px-3 py-1 text-xs transition-colors ${
+            indicators().macd ? "bg-white text-black" : "bg-[#222222] text-[#666666] hover:bg-[#2a2a2a]"
+          }`}
+        >
+          MACD
+        </button>
       </div>
 
-      {/* Chart Area */}
-      <div
-        style={{
-          flex: 1,
-          background: "#111111",
-          display: "flex",
-          "align-items": "center",
-          "justify-content": "center",
-          position: "relative",
-          "min-height": "500px",
-        }}
-      >
-        <svg width="100%" height="100%" viewBox="0 0 1000 500" preserveAspectRatio="none">
-          {/* Grid lines */}
-          {[0, 1, 2, 3, 4].map((i) => (
-            <line
-              key={i} // Added key property
-              x1="0"
-              y1={i * 125}
-              x2="1000"
-              y2={i * 125}
-              stroke="#1a1a1a"
-              strokeWidth="1"
-            />
-          ))}
-
-          {/* Price line */}
-          <path
-            d="M 0 400 Q 100 380, 200 350 T 400 300 T 600 200 T 800 150 L 1000 100"
-            stroke="#ffffff"
-            strokeWidth="2"
-            fill="none"
-            style={{ opacity: 0.8 }}
-          />
-
-          {/* Fill area */}
-          <path
-            d="M 0 400 Q 100 380, 200 350 T 400 300 T 600 200 T 800 150 L 1000 100 L 1000 500 L 0 500 Z"
-            fill="url(#chartGradient)"
-          />
-
-          <defs>
-            <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" style={{ "stop-color": "#ffffff", "stop-opacity": "0.1" }} />
-              <stop offset="100%" style={{ "stop-color": "#ffffff", "stop-opacity": "0" }} />
-            </linearGradient>
-          </defs>
-        </svg>
-
-        {/* Price labels */}
-        <div
-          style={{
-            position: "absolute",
-            right: "20px",
-            top: "20px",
-            "font-size": "12px",
-            color: "#666666",
-            "text-align": "right",
-          }}
-        >
-          <div>${(props.currentPrice * 1.1).toLocaleString()}</div>
-          <div style={{ "margin-top": "100px" }}>${props.currentPrice.toLocaleString()}</div>
-          <div style={{ "margin-top": "100px" }}>${(props.currentPrice * 0.9).toLocaleString()}</div>
-        </div>
+      {/* Chart Canvas */}
+      <div class="relative w-full h-96">
+        <canvas ref={canvasRef} class="w-full h-full" />
       </div>
     </div>
   )

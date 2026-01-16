@@ -1,0 +1,193 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Build and push Core Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/core-service
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/core-service:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/core-service:latest
+      
+      - name: Build and push Market Data Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/market-data-service
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/market-data-service:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/market-data-service:latest
+      
+      - name: Build and push WebSocket Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/websocket-service
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/websocket-service:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/websocket-service:latest
+      
+      - name: Build and push Report Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/report-service
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/report-service:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/report-service:latest
+      
+      - name: Build and push Monte Carlo Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/monte-carlo-service
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/monte-carlo-service:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/monte-carlo-service:latest
+
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name vatic-prop-staging --region ${{ env.AWS_REGION }}
+      
+      - name: Deploy Core Service to staging
+        run: |
+          kubectl set image deployment/core-service \
+            core-service=${{ env.ECR_REGISTRY }}/core-service:${{ github.sha }} \
+            -n staging
+      
+      - name: Deploy Market Data Service to staging
+        run: |
+          kubectl set image deployment/market-data-service \
+            market-data-service=${{ env.ECR_REGISTRY }}/market-data-service:${{ github.sha }} \
+            -n staging
+      
+      - name: Deploy WebSocket Service to staging
+        run: |
+          kubectl set image deployment/websocket-service \
+            websocket-service=${{ env.ECR_REGISTRY }}/websocket-service:${{ github.sha }} \
+            -n staging
+      
+      - name: Deploy Report Service to staging
+        run: |
+          kubectl set image deployment/report-service \
+            report-service=${{ env.ECR_REGISTRY }}/report-service:${{ github.sha }} \
+            -n staging
+      
+      - name: Deploy Monte Carlo Service to staging
+        run: |
+          kubectl set image deployment/monte-carlo-service \
+            monte-carlo-service=${{ env.ECR_REGISTRY }}/monte-carlo-service:${{ github.sha }} \
+            -n staging
+      
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/core-service -n staging --timeout=5m
+          kubectl rollout status deployment/market-data-service -n staging --timeout=5m
+          kubectl rollout status deployment/websocket-service -n staging --timeout=5m
+          kubectl rollout status deployment/report-service -n staging --timeout=5m
+          kubectl rollout status deployment/monte-carlo-service -n staging --timeout=5m
+      
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against staging..."
+          # Add smoke test commands here
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name vatic-prop-production --region ${{ env.AWS_REGION }}
+      
+      - name: Deploy Core Service to production
+        run: |
+          kubectl set image deployment/core-service \
+            core-service=${{ env.ECR_REGISTRY }}/core-service:${{ github.sha }} \
+            -n production
+      
+      - name: Deploy Market Data Service to production
+        run: |
+          kubectl set image deployment/market-data-service \
+            market-data-service=${{ env.ECR_REGISTRY }}/market-data-service:${{ github.sha }} \
+            -n production
+      
+      - name: Deploy WebSocket Service to production
+        run: |
+          kubectl set image deployment/websocket-service \
+            websocket-service=${{ env.ECR_REGISTRY }}/websocket-service:${{ github.sha }} \
+            -n production
+      
+      - name: Deploy Report Service to production
+        run: |
+          kubectl set image deployment/report-service \
+            report-service=${{ env.ECR_REGISTRY }}/report-service:${{ github.sha }} \
+            -n production
+      
+      - name: Deploy Monte Carlo Service to production
+        run: |
+          kubectl set image deployment/monte-carlo-service \
+            monte-carlo-service=${{ env.ECR_REGISTRY }}/monte-carlo-service:${{ github.sha }} \
+            -n production
+      
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/core-service -n production --timeout=5m
+          kubectl rollout status deployment/market-data-service -n production --timeout=5m
+          kubectl rollout status deployment/websocket-service -n production --timeout=5m
+          kubectl rollout status deployment/report-service -n production --timeout=5m
+          kubectl rollout status deployment/monte-carlo-service -n production --timeout=5m
+      
+      - name: Verify production deployment
+        run: |
+          echo "Verifying production deployment..."
+          # Add verification commands here

@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: report-service
+  labels:
+    app: report-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: report-service
+  template:
+    metadata:
+      labels:
+        app: report-service
+    spec:
+      containers:
+      - name: report-service
+        image: report-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3004
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: report-service-secrets
+              key: database-url
+        - name: KAFKA_BROKERS
+          value: "kafka-broker-0:9092,kafka-broker-1:9092,kafka-broker-2:9092"
+        - name: KAFKA_CLIENT_ID
+          value: "report-service"
+        - name: KAFKA_GROUP_ID
+          value: "report-service-group"
+        - name: CORE_SERVICE_URL
+          value: "http://core-service"
+        - name: MONTE_CARLO_SERVICE_URL
+          value: "http://monte-carlo-service"
+        - name: PORT
+          value: "3004"
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3004
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3004
+          initialDelaySeconds: 5
+          periodSeconds: 5

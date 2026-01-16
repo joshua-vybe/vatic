@@ -5,6 +5,10 @@ metadata:
   namespace: default
   labels:
     app: core-service
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+    prometheus.io/path: "/metrics"
 spec:
   type: ClusterIP
   ports:
@@ -12,5 +16,9 @@ spec:
     targetPort: 3000
     protocol: TCP
     name: http
+  - port: 8080
+    targetPort: 3000
+    protocol: TCP
+    name: metrics
   selector:
     app: core-service

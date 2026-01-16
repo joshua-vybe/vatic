@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-mono: "IBM Plex Mono", monospace;
+
+  /* Monochromatic luxury colors */
+  --color-background: #000000;
+  --color-surface: #111111;
+  --color-elevated: #1a1a1a;
+  --color-border: #222222;
+  --color-hover: #2a2a2a;
+
+  --color-foreground: #ffffff;
+  --color-muted: #aaaaaa;
+  --color-subtle: #666666;
+
+  --color-success: #888888;
+  --color-warning: #999999;
+  --color-error: #777777;
+
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-mono);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Smooth transitions */
+* {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-hover);
+}

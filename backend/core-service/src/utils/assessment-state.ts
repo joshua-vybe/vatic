@@ -17,6 +17,8 @@ export interface AssessmentState {
     entryPrice: number;
     currentPrice: number;
     unrealizedPnl: number;
+    openedAt: string | Date;
+    status: 'active' | 'cancelled';
   }>;
 }
 
@@ -111,7 +113,7 @@ export function calculateDrawdown(currentBalance: number, peakBalance: number): 
   if (peakBalance === 0 || currentBalance >= peakBalance) {
     return 0;
   }
-  return ((peakBalance - currentBalance) / peakBalance) * 100;
+  return (peakBalance - currentBalance) / peakBalance;
 }
 
 export async function updatePeakBalance(

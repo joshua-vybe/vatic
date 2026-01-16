@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+    spec:
+      containers:
+      - name: jaeger
+        image: jaegertracing/all-in-one:latest
+        ports:
+        - containerPort: 16686
+          name: ui
+        - containerPort: 14268
+          name: collector-http
+        - containerPort: 6831
+          protocol: UDP
+          name: agent-udp
+        env:
+        - name: COLLECTOR_ZIPKIN_HOST_PORT
+          value: ":9411"
+        - name: MEMORY_MAX_TRACES
+          value: "10000"
+        - name: SAMPLING_STRATEGIES_FILE
+          value: "/etc/jaeger/sampling.json"
+        args:
+        - "--sampling.strategies-file=/etc/jaeger/sampling.json"
+        volumeMounts:
+        - name: jaeger-config
+          mountPath: /etc/jaeger
+          readOnly: true
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 1
+            memory: 2Gi
+      volumes:
+      - name: jaeger-config
+        configMap:
+          name: jaeger-config

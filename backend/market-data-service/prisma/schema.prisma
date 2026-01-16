@@ -1,0 +1,17 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "cockroachdb"
+  url      = env("DATABASE_URL")
+}
+
+model EventStatus {
+  eventId   String   @id @map("event_id")
+  source    String
+  status    String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("event_status")
+}

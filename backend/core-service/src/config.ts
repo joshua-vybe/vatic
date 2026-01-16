@@ -12,6 +12,10 @@ export interface Config {
   stripeWebhookSecret: string;
   jwtSecret: string;
   jwtExpiresIn: string;
+  cryptoSlippage: number;
+  cryptoFee: number;
+  predictionSlippage: number;
+  predictionFee: number;
 }
 
 function getEnv(key: string, defaultValue?: string): string {
@@ -54,5 +58,9 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     stripeWebhookSecret: overrides?.stripeWebhookSecret || getEnv('STRIPE_WEBHOOK_SECRET'),
     jwtSecret: overrides?.jwtSecret || getEnv('JWT_SECRET'),
     jwtExpiresIn: overrides?.jwtExpiresIn || getEnv('JWT_EXPIRES_IN', '30d'),
+    cryptoSlippage: parseFloat(getEnv('CRYPTO_SLIPPAGE_PERCENT', '0.001')),
+    cryptoFee: parseFloat(getEnv('CRYPTO_FEE_PERCENT', '0.001')),
+    predictionSlippage: parseFloat(getEnv('PREDICTION_SLIPPAGE_PERCENT', '0.002')),
+    predictionFee: parseFloat(getEnv('PREDICTION_FEE_PERCENT', '0.002')),
   };
 }

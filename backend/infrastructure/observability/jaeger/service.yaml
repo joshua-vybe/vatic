@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: monitoring
+  labels:
+    app: jaeger
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 16686
+    targetPort: 16686
+    protocol: TCP
+    name: ui
+  selector:
+    app: jaeger
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: monitoring
+  labels:
+    app: jaeger
+spec:
+  type: ClusterIP
+  ports:
+  - port: 14268
+    targetPort: 14268
+    protocol: TCP
+    name: collector-http
+  - port: 6831
+    targetPort: 6831
+    protocol: UDP
+    name: agent-udp
+  selector:
+    app: jaeger

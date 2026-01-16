@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PositionStatus {
+  open
+  closed
+  cancelled
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -14,9 +20,11 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  sessions     Session[]
-  purchases    Purchase[]
-  assessments  Assessment[]
+  sessions       Session[]
+  purchases      Purchase[]
+  assessments    Assessment[]
+  fundedAccounts FundedAccount[]
+  withdrawals    Withdrawal[]
 
   @@map("users")
 }
@@ -44,8 +52,9 @@ model Tier {
   maxRiskPerTrade Float  @map("max_risk_per_trade")
   profitSplit     Float  @map("profit_split")
 
-  purchases   Purchase[]
-  assessments Assessment[]
+  purchases      Purchase[]
+  assessments    Assessment[]
+  fundedAccounts FundedAccount[]
 
   @@map("tiers")
 }
@@ -83,6 +92,7 @@ model Assessment {
   tier           Tier            @relation(fields: [tierId], references: [id])
   purchase       Purchase        @relation(fields: [purchaseId], references: [id])
   virtualAccount VirtualAccount?
+  fundedAccount  FundedAccount?
   positions      Position[]
   trades         Trade[]
   ruleChecks     RuleCheck[]
@@ -108,16 +118,17 @@ model VirtualAccount {
 }
 
 model Position {
-  id            String    @id @default(uuid())
-  assessmentId  String    @map("assessment_id")
+  id            String         @id @default(uuid())
+  assessmentId  String         @map("assessment_id")
   market        String
   side          String
+  status        PositionStatus @default(open)
   quantity      Float
-  entryPrice    Float     @map("entry_price")
-  currentPrice  Float     @map("current_price")
-  unrealizedPnl Float     @map("unrealized_pnl")
-  openedAt      DateTime  @default(now()) @map("opened_at")
-  closedAt      DateTime? @map("closed_at")
+  entryPrice    Float          @map("entry_price")
+  currentPrice  Float          @map("current_price")
+  unrealizedPnl Float          @map("unrealized_pnl")
+  openedAt      DateTime       @default(now()) @map("opened_at")
+  closedAt      DateTime?      @map("closed_at")
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   trades     Trade[]
@@ -138,6 +149,7 @@ model Trade {
   slippage     Float
   fee          Float
   pnl          Float
+  cancelled    Boolean  @default(false)
   timestamp    DateTime @default(now())
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
@@ -174,4 +186,62 @@ model Violation {
 
   @@index([assessmentId])
   @@map("violations")
+}
+
+model FundedAccount {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  assessmentId    String    @unique @map("assessment_id")
+  tierId          String    @map("tier_id")
+  status          String
+  activatedAt     DateTime  @default(now()) @map("activated_at")
+  closedAt        DateTime? @map("closed_at")
+  closureReason   String?   @map("closure_reason")
+
+  user                 User                    @relation(fields: [userId], references: [id])
+  tier                 Tier                    @relation(fields: [tierId], references: [id])
+  assessment           Assessment              @relation(fields: [assessmentId], references: [id])
+  fundedVirtualAccount FundedVirtualAccount?
+  withdrawals          Withdrawal[]
+
+  @@index([userId, status])
+  @@map("funded_accounts")
+}
+
+model FundedVirtualAccount {
+  id               String   @id @default(uuid())
+  fundedAccountId  String   @unique @map("funded_account_id")
+  startingBalance  Int      @map("starting_balance")
+  currentBalance   Float    @map("current_balance")
+  peakBalance      Float    @map("peak_balance")
+  realizedPnl      Float    @map("realized_pnl")
+  unrealizedPnl    Float    @map("unrealized_pnl")
+  totalWithdrawals Float    @default(0) @map("total_withdrawals")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  fundedAccount FundedAccount @relation(fields: [fundedAccountId], references: [id], onDelete: Cascade)
+
+  @@map("funded_virtual_accounts")
+}
+
+model Withdrawal {
+  id              String    @id @default(uuid())
+  fundedAccountId String    @map("funded_account_id")
+  userId          String    @map("user_id")
+  amount          Float
+  status          String
+  requestedAt     DateTime  @default(now()) @map("requested_at")
+  approvedAt      DateTime? @map("approved_at")
+  completedAt     DateTime? @map("completed_at")
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectionReason String?   @map("rejection_reason")
+  stripePayoutId  String?   @map("stripe_payout_id")
+
+  fundedAccount FundedAccount @relation(fields: [fundedAccountId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
+
+  @@index([fundedAccountId])
+  @@index([userId])
+  @@index([status])
+  @@map("withdrawals")
 }

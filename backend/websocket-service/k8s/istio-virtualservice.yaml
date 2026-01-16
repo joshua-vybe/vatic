@@ -1,0 +1,27 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: websocket-service
+  namespace: default
+spec:
+  hosts:
+  - websocket-service
+  http:
+  - match:
+    - uri:
+        prefix: /ws
+    route:
+    - destination:
+        host: websocket-service
+        port:
+          number: 3003
+    timeout: 3600s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  - route:
+    - destination:
+        host: websocket-service
+        port:
+          number: 3003
+    timeout: 30s

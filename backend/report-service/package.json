@@ -1,24 +1,33 @@
 {
   "name": "report-service",
   "version": "1.0.0",
-  "description": "Report generation service for Vatic Prop",
-  "type": "module",
+  "description": "Report Service for assessment analytics and reporting",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
-    "dev": "bun run src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
-    "start": "bun run dist/index.js"
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir dist",
+    "start": "bun run src/index.ts",
+    "db:migrate": "bunx prisma migrate dev",
+    "db:generate": "bunx prisma generate",
+    "test": "bun test",
+    "test:integration": "bun test tests/integration.test.ts"
   },
   "dependencies": {
-    "elysia": "latest",
-    "@elysiajs/cors": "latest",
+    "@prisma/client": "^5.7.1",
+    "@elysiajs/cors": "^0.7.0",
+    "elysia": "^0.7.0",
     "kafkajs": "^2.2.4",
-    "@prisma/client": "^5.7.0"
+    "axios": "^1.6.2",
+    "prom-client": "^15.1.0",
+    "@opentelemetry/api": "^1.7.0",
+    "@opentelemetry/sdk-node": "^0.45.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.40.0",
+    "@opentelemetry/exporter-jaeger": "^1.18.0",
+    "winston": "^3.14.1"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.3.0",
-    "prisma": "^5.7.0"
+    "prisma": "^5.7.1"
   }
 }

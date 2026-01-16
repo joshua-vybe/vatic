@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-config
+  namespace: monitoring
+data:
+  sampling.json: |
+    {
+      "default_strategy": {
+        "type": "probabilistic",
+        "param": 0.1
+      },
+      "service_strategies": [
+        {
+          "service": "core-service",
+          "type": "probabilistic",
+          "param": 0.1
+        },
+        {
+          "service": "market-data-service",
+          "type": "probabilistic",
+          "param": 0.1
+        },
+        {
+          "service": "monte-carlo-service",
+          "type": "probabilistic",
+          "param": 0.1
+        },
+        {
+          "service": "websocket-service",
+          "type": "probabilistic",
+          "param": 0.1
+        },
+        {
+          "service": "report-service",
+          "type": "probabilistic",
+          "param": 0.1
+        }
+      ]
+    }

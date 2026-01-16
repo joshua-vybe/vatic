@@ -1,25 +1,37 @@
 {
   "name": "monte-carlo-service",
   "version": "1.0.0",
-  "description": "Monte Carlo simulation service for Vatic Prop",
-  "type": "module",
+  "description": "Monte Carlo Service for distributed risk simulations via Ray Serve",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
-    "dev": "bun run src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
-    "start": "bun run dist/index.js"
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build src/index.ts --outfile dist/index.js",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev"
   },
   "dependencies": {
-    "elysia": "latest",
-    "@elysiajs/cors": "latest",
+    "@prisma/client": "^5.7.1",
     "axios": "^1.6.2",
+    "elysia": "^0.7.0",
     "kafkajs": "^2.2.4",
-    "@prisma/client": "^5.7.0"
+    "node-cron": "^3.0.2",
+    "redis": "^4.6.11",
+    "prom-client": "^15.1.0",
+    "@opentelemetry/api": "^1.7.0",
+    "@opentelemetry/sdk-node": "^0.45.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.40.0",
+    "@opentelemetry/exporter-jaeger": "^1.18.0",
+    "winston": "^3.14.1"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.3.0",
-    "prisma": "^5.7.0"
+    "@types/node": "^20.10.5",
+    "@types/node-cron": "^3.0.9",
+    "prisma": "^5.7.1",
+    "typescript": "^5.3.3"
   }
 }

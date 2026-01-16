@@ -1,5 +1,7 @@
 import { Kafka, Producer } from 'kafkajs';
 import { createLogger } from './logger';
+import { getCorrelationId } from './correlation-id';
+import { context, trace, propagation } from '@opentelemetry/api';
 
 const logger = createLogger('kafka');
 
@@ -26,25 +28,39 @@ export async function initializeKafka(brokers: string[], clientId: string): Prom
   }
 }
 
-export async function publishEvent(topic: string, message: object): Promise<void> {
+export async function publishEvent(topic: string, message: object): Promise<{ success: boolean; latency: number }> {
   if (!kafkaProducer) {
     logger.warn('Kafka producer not initialized, skipping event publication', { topic });
-    return;
+    return { success: false, latency: 0 };
   }
 
+  const startTime = Date.now();
   try {
+    const correlationId = getCorrelationId();
+    const headers: Record<string, string> = {
+      'correlation-id': correlationId,
+    };
+
+    // Inject trace context into headers
+    const carrier: Record<string, string> = {};
+    propagation.inject(context.active(), carrier);
+    Object.assign(headers, carrier);
+
     await kafkaProducer.send({
       topic,
       messages: [
         {
           value: JSON.stringify(message),
+          headers,
         },
       ],
     });
-    logger.debug('Event published', { topic, message });
+    const latency = Date.now() - startTime;
+    logger.debug('Event published', { topic, message, latency });
+    return { success: true, latency };
   } catch (error) {
     logger.error('Failed to publish event', { topic, error: String(error) });
-    // Don't throw - allow authentication to proceed even if Kafka fails
+    return { success: false, latency: Date.now() - startTime };
   }
 }
 
